@@ -57,7 +57,7 @@ deploy — `iacheiofertas-core`, `-agent-glp`, `-agent-aquarismo`; `-agent-templ
 
 Manual (do Mac):
 ```sh
-SSH_HOST=178.105.7.212 DEPLOY_DIR=/opt/iacheiofertas/platform ./scripts/deploy.sh core
+SSH_HOST=<ip-do-vps> DEPLOY_DIR=/opt/iacheiofertas/platform ./scripts/deploy.sh core
 ```
 
 Manual (no VPS):
