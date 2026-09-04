@@ -89,12 +89,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # `secrets.*` não pode ser referenciado direto num `if:`/`with:` de step — só
+      # dentro de `env:`/`run:` (restrição do parser de expressões do Actions). Calcula
+      # presença aqui e usa o output nos passos seguintes.
+      - name: Detecta se há deploy key do core-client
+        id: core_client_key
+        env:
+          KEY: ${{ secrets.CORE_CLIENT_DEPLOY_KEY }}
+        run: echo "present=$([ -n "$KEY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
       # Repassa a deploy key do iacheiofertas-core-client pro build via BuildKit SSH
       # forwarding (`RUN --mount=type=ssh` no Dockerfile) — a chave nunca é gravada numa
       # camada da imagem. Sem efeito nos repos que não usam a chave (ex: iacheiofertas-
       # platform, que não builda nada aqui).
       - name: SSH agent (deploy key do core-client)
-        if: ${{ secrets.CORE_CLIENT_DEPLOY_KEY != '' }}
+        if: steps.core_client_key.outputs.present == 'true'
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.CORE_CLIENT_DEPLOY_KEY }}
@@ -105,7 +114,7 @@ jobs:
           context: ${{ inputs.context }}
           file: ${{ inputs.dockerfile }}
           push: true
-          ssh: ${{ secrets.CORE_CLIENT_DEPLOY_KEY != '' && 'default' || '' }}
+          ssh: ${{ steps.core_client_key.outputs.present == 'true' && 'default' || '' }}
           tags: |
             ${{ steps.meta.outputs.image }}:main
             ${{ steps.meta.outputs.image }}:${{ github.sha }}
