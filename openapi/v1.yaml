@@ -29,6 +29,35 @@ paths:
         "503":
           description: serviço subindo ou dependência crítica fora
 
+  /v1/discover:
+    post:
+      operationId: discover
+      summary: Busca candidatas reais nas lojas integradas, por palavra-chave (sem LLM)
+      description: >
+        Equivalente ao antigo `GET /api/v1/ofertas/candidatas` do engine legado. O core é o
+        único dono da integração de loja/sidecar; o agente manda palavras-chave e recebe uma
+        lista crua de candidatas pra rankear/selecionar/deduplicar do lado dele. Pode devolver
+        `candidates: []` — não é erro, só quer dizer nada encontrado neste ciclo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscoverRequest"
+      responses:
+        "200":
+          description: candidatas cruas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscoverResponse"
+        "422":
+          description: payload inválido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /v1/enrich:
     post:
       operationId: enrich
@@ -120,6 +149,62 @@ components:
           type: boolean
         uptime_s:
           type: integer
+
+    DiscoverRequest:
+      type: object
+      required: [niche_id]
+      properties:
+        niche_id:
+          type: string
+          example: achados_glp
+        keywords:
+          type: array
+          items:
+            type: string
+          description: termos de busca (catálogo/API) pras lojas habilitadas do nicho
+        keywords_ml:
+          type: array
+          items:
+            type: string
+          description: >
+            termos pra busca TEXTUAL no Mercado Livre — mais cara que o catálogo, só
+            usada quando include_ml_search=true
+        stores:
+          type: array
+          items:
+            type: string
+            enum: [mercadolivre, amazon, shopee]
+          description: vazio = todas as lojas habilitadas pro nicho em iacheiofertas-config
+        include_ml_search:
+          type: boolean
+          default: false
+
+    DiscoverResponse:
+      type: object
+      required: [candidates]
+      properties:
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/Candidate"
+
+    Candidate:
+      allOf:
+        - $ref: "#/components/schemas/EnrichResponse"
+        - type: object
+          properties:
+            brand_name:
+              type: string
+              nullable: true
+            category_tag:
+              type: string
+              nullable: true
+            fabric_tag:
+              type: string
+              nullable: true
+            rating_score:
+              type: number
+              nullable: true
 
     EnrichRequest:
       type: object

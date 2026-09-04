@@ -43,6 +43,7 @@ Fonte de verdade: [`openapi/v1.yaml`](../openapi/v1.yaml).
 | Rota | Uso |
 |---|---|
 | `GET /v1/healthz` | liveness + `config_rev` |
+| `POST /v1/discover` | `niche_id` + `keywords[]` → candidatas cruas nas lojas habilitadas. Equivalente ao antigo `GET /api/v1/ofertas/candidatas`. Sem LLM. |
 | `POST /v1/enrich` | URL de produto → normalizado (preço de/atual, drop, affiliate_url, image_url, flags). Sem LLM. |
 | `POST /v1/publish` | `niche_id` + `offer` + `targets[]` + `idempotency_key` + `dry_run` |
 
