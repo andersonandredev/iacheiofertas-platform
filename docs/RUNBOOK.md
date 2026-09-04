@@ -105,6 +105,29 @@ do infra registra esse alias na rede. Se `core` não resolver `evolution-api`:
 `/v1/publish` passa por ACL + cooldown/teto + log, mas o envio real (WhatsApp/Graph) vira
 no-op. Usado na validação antes do cutover.
 
+## Link curto próprio (`/r/{codigo}`)
+
+`core` gera `{BASE_URL}/r/{codigo}` pro afiliado de ML/Amazon (ver `app/links.py` —
+Shopee fica de fora, já tem link curto oficial da própria Shopee). Pra funcionar de
+verdade, `BASE_URL` precisa ser um domínio público real roteado até `localhost:8000`
+(o `core` só escuta em `127.0.0.1:8000`). Exemplo de bloco Caddy reaproveitando um
+domínio que já serve outra coisa (`handle` por path, sem criar subdomínio novo):
+
+```caddyfile
+seu-dominio.example {
+    handle /r/* {
+        reverse_proxy localhost:8000
+    }
+    handle {
+        reverse_proxy localhost:8001   # ou o que já servia esse domínio antes
+    }
+}
+```
+
+`systemctl reload caddy` depois de editar. `LINKS_CURTOS_DB_PATH` (default
+`/app/state/links_curtos.db`, dentro do volume de estado) guarda o mapeamento
+código→URL — sobrevive a redeploy, não sobrevive a apagar o volume de estado.
+
 ## evolution-manager (painel web, opcional)
 
 ```sh
