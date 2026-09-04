@@ -1,0 +1,11 @@
+# segredos reais — só os *.example vão pro git
+.env
+env/*.env
+!env/*.env.example
+
+# artefatos de decriptação do SOPS
+*.decrypted
+*.dec.env
+
+.DS_Store
+*.log

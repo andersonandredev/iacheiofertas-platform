@@ -1,0 +1,13 @@
+# SOPS + age. Segredo cifrado vive no git como env/<svc>.env.sops;
+# o valor em claro (env/<svc>.env) é gitignored e produzido por `sops -d`.
+#
+#   age-keygen -o ~/.config/sops/age/keys.txt        # uma vez por máquina/deploy
+#   # cole a public key ("age1...") abaixo em `age:`
+#   sops -e env/core.env > env/core.env.sops         # cifrar
+#   sops -d env/core.env.sops > env/core.env         # decifrar (no VPS, antes do compose)
+#
+creation_rules:
+  - path_regex: env/.*\.env(\.sops)?$
+    encrypted_regex: "^(.*)$"
+    age: >-
+      REPLACE_COM_A_PUBLIC_KEY_age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

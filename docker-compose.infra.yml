@@ -1,0 +1,87 @@
+# Infra que muda raramente: Evolution API (WhatsApp) + Postgres + Redis.
+# Separada da stack de app de propósito — um deploy de aplicação (`compose pull &&
+# up -d` no docker-compose.yml) nunca toca no Postgres do Evolution.
+#
+# ATENÇÃO: evolution-api NÃO pode rodar em duas stacks ao mesmo tempo (Mac + VPS) —
+# a segunda instância reconecta na mesma conta e ROUBA a sessão. Ver docs/CUTOVER.md.
+#
+#   docker network create iacheiofertas
+#   docker compose -p iacheiofertas-infra -f docker-compose.infra.yml up -d
+#   # manager (painel web), opcional:
+#   docker compose -p iacheiofertas-infra -f docker-compose.infra.yml --profile manager up -d
+#
+# Projeto separado de propósito (-p iacheiofertas-infra) pra `compose ps` do app não
+# listar a infra e vice-versa. Os dois se acham pela rede externa `iacheiofertas`.
+
+networks:
+  iacheiofertas:
+    external: true
+
+volumes:
+  evolution_instances:
+  evolution_postgres_data:
+  evolution_redis_data:
+
+services:
+  evolution-api:
+    image: evoapicloud/evolution-api:${EVOLUTION_IMAGE_TAG:-latest}
+    container_name: iacheiofertas_evolution_api
+    restart: always
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      - SERVER_URL=${EVOLUTION_SERVER_URL:-http://evolution-api:8080}
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:?defina EVOLUTION_API_KEY no .env}
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@evolution-postgres:5432/${POSTGRES_DB}?schema=evolution_api
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://evolution-redis:6379/6
+    volumes:
+      # Sessão do WhatsApp pareada — o volume mais crítico do cutover (re-parear = QR de novo).
+      - evolution_instances:/evolution/instances
+    depends_on:
+      - evolution-postgres
+      - evolution-redis
+    networks:
+      - iacheiofertas
+
+  evolution-postgres:
+    image: postgres:15
+    container_name: iacheiofertas_evolution_postgres
+    restart: always
+    command: ["postgres", "-c", "max_connections=1000"]
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - evolution_postgres_data:/var/lib/postgresql/data
+    networks:
+      - iacheiofertas
+
+  evolution-redis:
+    image: redis:7
+    container_name: iacheiofertas_evolution_redis
+    restart: always
+    volumes:
+      - evolution_redis_data:/data
+    networks:
+      - iacheiofertas
+
+  evolution-manager:
+    image: evoapicloud/evolution-manager:latest
+    container_name: iacheiofertas_evolution_manager
+    restart: always
+    profiles: ["manager"]
+    ports:
+      - "127.0.0.1:3000:80"
+    volumes:
+      # A imagem :latest tem um nginx.conf embutido com `gzip_proxied ... must-revalidate`
+      # (valor inválido) que trava o container num loop de restart. Sobrescreve com a cópia
+      # corrigida. Pegar o arquivo do repo legado core_ofertas_br/evolution-manager-nginx.conf
+      # e colocar em ./infra/evolution-manager-nginx.conf antes de subir com --profile manager.
+      - ./infra/evolution-manager-nginx.conf:/etc/nginx/conf.d/nginx.conf:ro
+    depends_on:
+      - evolution-api
+    networks:
+      - iacheiofertas

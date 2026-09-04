@@ -1,0 +1,302 @@
+openapi: 3.1.0
+info:
+  title: iacheiofertas core /v1
+  version: "1.0.0"
+  description: >
+    Contrato canônico entre os agentes de nicho e o `iacheiofertas-core`.
+    Versionado e ADITIVO: campo novo é opcional, mudança que quebra vira `/v2` ao lado.
+    O agente é dono do roteamento lógico (`targets`); o core resolve credencial (vault)
+    e é o portão da ACL.
+
+servers:
+  - url: http://core:8000
+    description: rede interna do compose
+  - url: http://127.0.0.1:8000
+    description: loopback do host (atrás de proxy em produção)
+
+paths:
+  /v1/healthz:
+    get:
+      operationId: healthz
+      summary: Liveness + revisão de config carregada
+      responses:
+        "200":
+          description: serviço no ar
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "503":
+          description: serviço subindo ou dependência crítica fora
+
+  /v1/enrich:
+    post:
+      operationId: enrich
+      summary: Normaliza uma URL de produto (preço de/atual, link de afiliado, imagem, flags)
+      description: >
+        Sem LLM. Resolve a página do produto na loja de origem (via sidecar quando preciso),
+        extrai preço "de"/atual, calcula o drop, gera o link de afiliado e devolve a imagem.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnrichRequest"
+      responses:
+        "200":
+          description: produto normalizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrichResponse"
+        "422":
+          description: URL não reconhecida / loja não integrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: falha ao resolver a página de origem (sidecar fora, bloqueio anti-bot)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/publish:
+    post:
+      operationId: publish
+      summary: Publica uma oferta nos canais dos targets informados
+      description: >
+        `idempotency_key` vem do dedup do agente — a mesma chave nunca publica duas vezes
+        (retorna o resultado já registrado). `dry_run=true` transforma todo envio real
+        (WhatsApp/Graph) em no-op que ainda passa por ACL, cooldown/teto e logging.
+        O core valida cada `target.destination_id` contra a ACL antes de resolver credencial.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishRequest"
+      responses:
+        "200":
+          description: resultado da publicação (por canal de cada target)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishResponse"
+        "403":
+          description: destino fora da ACL do nicho
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: bloqueado por cooldown / teto diário do destino
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishResponse"
+        "422":
+          description: payload inválido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  schemas:
+    Health:
+      type: object
+      required: [status, config_rev]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        config_rev:
+          type: string
+          description: SHA do iacheiofertas-config carregado
+          example: "a1b2c3d"
+        dry_run:
+          type: boolean
+        uptime_s:
+          type: integer
+
+    EnrichRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+        niche_id:
+          type: string
+          description: opcional; ajusta regras de tagueamento por nicho
+          example: achados_glp
+
+    EnrichResponse:
+      type: object
+      required: [product_url, affiliate_url, price_current, store]
+      properties:
+        product_url:
+          type: string
+          format: uri
+        affiliate_url:
+          type: string
+          format: uri
+        store:
+          type: string
+          enum: [mercadolivre, amazon, shopee]
+        title:
+          type: string
+        image_url:
+          type: string
+          format: uri
+        price_current:
+          type: number
+        price_from:
+          type: number
+          nullable: true
+        drop_pct:
+          type: integer
+          nullable: true
+        flags:
+          $ref: "#/components/schemas/OfferFlags"
+
+    PublishRequest:
+      type: object
+      required: [niche_id, offer, targets, idempotency_key]
+      properties:
+        niche_id:
+          type: string
+          example: achados_glp
+        idempotency_key:
+          type: string
+          description: chave do dedup do agente; determinística por (nicho, produto, preço)
+        dry_run:
+          type: boolean
+          default: false
+        offer:
+          $ref: "#/components/schemas/Offer"
+        targets:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/Target"
+
+    Target:
+      type: object
+      required: [destination_id, channels]
+      properties:
+        destination_id:
+          type: string
+          description: id lógico do iacheiofertas-config/destinations (nunca credencial)
+          example: whatsapp:glp:grupo-1
+        channels:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum: [whatsapp, instagram_feed, instagram_story, facebook_feed]
+
+    Offer:
+      type: object
+      required: [product_url, title, price_current]
+      properties:
+        product_url:
+          type: string
+          format: uri
+        affiliate_url:
+          type: string
+          format: uri
+          description: se ausente, o core chama enrich internamente
+        title:
+          type: string
+        category:
+          type: string
+        caption:
+          type: string
+          description: legenda já gerada pelo agente
+        image_url:
+          type: string
+          format: uri
+        price_current:
+          type: number
+        price_original:
+          type: number
+          nullable: true
+        discount_pct:
+          type: integer
+          nullable: true
+        brand_name:
+          type: string
+          nullable: true
+        tags:
+          type: object
+          properties:
+            category:
+              type: string
+            fabric:
+              type: string
+        rating_score:
+          type: number
+          nullable: true
+        flags:
+          $ref: "#/components/schemas/OfferFlags"
+        coupon:
+          type: object
+          nullable: true
+          required: [discount_type, discount_value]
+          properties:
+            discount_type:
+              type: string
+              enum: [percent, fixed]
+            discount_value:
+              type: number
+            min_purchase:
+              type: number
+              nullable: true
+
+    OfferFlags:
+      type: object
+      properties:
+        fast_shipping:
+          type: boolean
+        trusted_store:
+          type: boolean
+
+    PublishResponse:
+      type: object
+      required: [status, idempotency_key, results]
+      properties:
+        status:
+          type: string
+          enum: [published, partial, skipped, blocked, dry_run]
+        idempotency_key:
+          type: string
+        replayed:
+          type: boolean
+          description: true quando a chave já tinha sido processada antes
+        results:
+          type: array
+          items:
+            type: object
+            required: [destination_id, channel, outcome]
+            properties:
+              destination_id:
+                type: string
+              channel:
+                type: string
+              outcome:
+                type: string
+                enum: [sent, dry_run, blocked_cooldown, blocked_quota, acl_denied, error]
+              detail:
+                type: string
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        detail:
+          type: string

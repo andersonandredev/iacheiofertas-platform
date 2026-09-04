@@ -1,0 +1,16 @@
+# Copie pra .github/workflows/ship.yml no repo de serviço (core / agent-glp / agent-aquarismo).
+# Ajuste image_name e service. `secrets: inherit` repassa SSH_HOST/SSH_USER/SSH_KEY/DEPLOY_DIR.
+name: ship
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  ship:
+    uses: andersonandredev/iacheiofertas-platform/.github/workflows/reusable-ship.yml@main
+    with:
+      image_name: iacheiofertas-core   # <- nome do repo
+      service: core                    # <- serviço no docker-compose.yml do platform
+    secrets: inherit

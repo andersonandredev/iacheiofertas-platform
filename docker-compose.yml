@@ -1,0 +1,85 @@
+# Stack de aplicação: core + agentes de nicho (rodada 1 = glp + aquarismo).
+# Imagens vêm do GHCR — NÃO há `build:` aqui (deploy = `compose pull && up -d`).
+# A stack Evolution vive em docker-compose.infra.yml, na mesma rede externa.
+#
+#   docker network create iacheiofertas   # uma vez
+#   docker compose -p iacheiofertas-infra -f docker-compose.infra.yml up -d
+#   docker compose up -d
+#
+# Nome do projeto vem de COMPOSE_PROJECT_NAME no .env (=iacheiofertas).
+
+networks:
+  iacheiofertas:
+    external: true
+
+services:
+  core:
+    image: ghcr.io/andersonandredev/iacheiofertas-core:${CORE_TAG:-main}
+    container_name: iacheiofertas_core
+    restart: always
+    env_file:
+      - env/core.env
+    environment:
+      - CONFIG_REPO_URL=${CONFIG_REPO_URL:-https://github.com/andersonandredev/iacheiofertas-config}
+      - CONFIG_REF=${CONFIG_REF:-main}
+      - DRY_RUN=${CORE_DRY_RUN:-false}
+      # Evolution é resolvido pelo nome de serviço na rede externa compartilhada
+      # (o container do infra registra o alias `evolution-api` na rede `iacheiofertas`).
+      - EVOLUTION_API_URL=http://evolution-api:8080
+      - BUSCA_HTML_ML_API_URL=${BUSCA_HTML_ML_API_URL:-}
+      - BUSCA_HTML_ML_2_API_URL=${BUSCA_HTML_ML_2_API_URL:-}
+      - BUSCA_HTML_AMAZON_API_URL=${BUSCA_HTML_AMAZON_API_URL:-}
+      - BUSCA_HTML_GOOGLE_SHOPPING_API_URL=${BUSCA_HTML_GOOGLE_SHOPPING_API_URL:-}
+    ports:
+      # Só no loopback do host — atrás de proxy (Caddy) pra exposição pública.
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # ingest_eventos.db (cooldown/auditoria/teto), links curtos, mídia de curadoria.
+      - ${STATE_DIR:-/opt/iacheiofertas/state}/core:/app/state
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/v1/healthz').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - iacheiofertas
+
+  agent-glp:
+    image: ghcr.io/andersonandredev/iacheiofertas-agent-glp:${AGENT_GLP_TAG:-main}
+    container_name: iacheiofertas_agent_glp
+    restart: always
+    env_file:
+      - env/agent-glp.env
+    environment:
+      - CORE_URL=http://core:8000
+      - NICHE_ID=achados_glp
+      - CONFIG_REPO_URL=${CONFIG_REPO_URL:-https://github.com/andersonandredev/iacheiofertas-config}
+      - CONFIG_REF=${CONFIG_REF:-main}
+    volumes:
+      # dedup do agente: 1 SQLite por nicho (single-writer). Copiado inteiro no cutover.
+      - ${STATE_DIR:-/opt/iacheiofertas/state}/agent-glp:/app/state
+    depends_on:
+      core:
+        condition: service_healthy
+    networks:
+      - iacheiofertas
+
+  agent-aquarismo:
+    image: ghcr.io/andersonandredev/iacheiofertas-agent-aquarismo:${AGENT_AQUARISMO_TAG:-main}
+    container_name: iacheiofertas_agent_aquarismo
+    restart: always
+    env_file:
+      - env/agent-aquarismo.env
+    environment:
+      - CORE_URL=http://core:8000
+      - NICHE_ID=aquarismo_marinho
+      - CONFIG_REPO_URL=${CONFIG_REPO_URL:-https://github.com/andersonandredev/iacheiofertas-config}
+      - CONFIG_REF=${CONFIG_REF:-main}
+    volumes:
+      - ${STATE_DIR:-/opt/iacheiofertas/state}/agent-aquarismo:/app/state
+    depends_on:
+      core:
+        condition: service_healthy
+    networks:
+      - iacheiofertas
