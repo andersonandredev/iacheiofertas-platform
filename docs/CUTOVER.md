@@ -215,6 +215,26 @@ volta a ficar sem resultado de ML até o Mac voltar). Considerar contratar proxy
 residencial (Webshare/IPRoyal, mais barato pra testar) se essa dependência incomodar
 no longo prazo.
 
+### Feed do Instagram/Facebook + rotação de 7 dias portados pro v1 — 2026-09-04 ~22:12 UTC
+
+Pedido do usuário: voltar a regra do legado (memória
+reef_ofertas_meta_instagram_integration) de publicar cada oferta também no feed
+(IG imagem única + espelho na Página FB) e apagar via API depois de 7 dias, virando
+catálogo rolante. Implementado no `core` (`app/feed_posts.py` registro,
+`app/feed_rotacao.py` worker APScheduler a cada `FEED_ROTACAO_INTERVALO_HORAS` — ver
+commit `d04a922`), ligado só pro **aquarismo** (`targets/aquarismo_marinho.json` +
+`instagram_feed`/`facebook_feed`) — GLP fica de fora enquanto durar a restrição de
+conta da Meta (até 2026-10-04, ver seção acima). Link curto próprio do ML (`/r/{codigo}`)
+também portado antes disso (commit `9130366`) — Amazon fica com o link oficial direto
+por decisão do usuário (já curto o bastante).
+
+Validado ao vivo, ponta a ponta, contra a API real: `POST /v1/publish` com
+`instagram_feed`+`facebook_feed` → `sent` nos dois, registrado em `feed_posts.db`;
+posts backdatados pra 8 dias; `feed_rotacao.rodar_rotacao()` chamado manualmente →
+`{"apagados": 2, "falhas": 0}`; confirmado por `GET` direto na Graph API que os 2
+posts de teste realmente sumiram do Instagram/Facebook. Sem custo de proxy ou infra
+nova — só o worker já embutido no `core`.
+
 ## Piloto gradual (plano original, não usado neste cutover — referência)
 
 ## Estado a migrar
