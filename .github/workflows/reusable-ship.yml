@@ -16,6 +16,9 @@
 #       secrets: inherit
 #
 # Secrets esperados no repo consumidor (ou na org): SSH_HOST, SSH_USER, SSH_KEY, DEPLOY_DIR
+# + CORE_CLIENT_DEPLOY_KEY (deploy key read-only do iacheiofertas-core-client — só quem
+# instala o SDK via `pip install git+ssh://...` no requirements.txt precisa dela;
+# consumidor sem essa linha simplesmente não usa o secret).
 
 on:
   workflow_call:
@@ -57,6 +60,8 @@ on:
         required: false
       DEPLOY_DIR:
         required: false
+      CORE_CLIENT_DEPLOY_KEY:
+        required: false
 
 permissions:
   contents: read
@@ -84,12 +89,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Repassa a deploy key do iacheiofertas-core-client pro build via BuildKit SSH
+      # forwarding (`RUN --mount=type=ssh` no Dockerfile) — a chave nunca é gravada numa
+      # camada da imagem. Sem efeito nos repos que não usam a chave (ex: iacheiofertas-
+      # platform, que não builda nada aqui).
+      - name: SSH agent (deploy key do core-client)
+        if: ${{ secrets.CORE_CLIENT_DEPLOY_KEY != '' }}
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.CORE_CLIENT_DEPLOY_KEY }}
+
       - name: Build & push
         uses: docker/build-push-action@v6
         with:
           context: ${{ inputs.context }}
           file: ${{ inputs.dockerfile }}
           push: true
+          ssh: ${{ secrets.CORE_CLIENT_DEPLOY_KEY != '' && 'default' || '' }}
           tags: |
             ${{ steps.meta.outputs.image }}:main
             ${{ steps.meta.outputs.image }}:${{ github.sha }}

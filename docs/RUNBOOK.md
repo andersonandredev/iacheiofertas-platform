@@ -21,10 +21,18 @@ cp env/core.env.example env/core.env && $EDITOR env/core.env
 docker network create iacheiofertas
 mkdir -p /opt/iacheiofertas/state/{core,agent-glp,agent-aquarismo}
 
-# 5. preflight
+# 5. deploy key do iacheiofertas-config (repo privado — core/agentes clonam de dentro
+#    do container, ver app/config_repo.py em cada um). Gere UMA chave read-only:
+mkdir -p /opt/iacheiofertas/secrets
+ssh-keygen -t ed25519 -f /opt/iacheiofertas/secrets/iacheiofertas_config_deploy_key -N "" -C "vps-runtime-readonly"
+gh repo deploy-key add /opt/iacheiofertas/secrets/iacheiofertas_config_deploy_key.pub \
+  --repo andersonandredev/iacheiofertas-config --title "vps-runtime-readonly"
+rm /opt/iacheiofertas/secrets/iacheiofertas_config_deploy_key.pub   # só a privada fica
+
+# 6. preflight
 ./scripts/preflight.sh
 
-# 6. infra e app
+# 7. infra e app
 docker compose -p iacheiofertas-infra -f docker-compose.infra.yml up -d
 docker compose up -d
 ```
@@ -36,6 +44,16 @@ Login no GHCR (imagens são privadas): `echo $GHCR_PAT | docker login ghcr.io -u
 
 Automático: push em `main` de qualquer repo de serviço → CI builda e faz `compose pull &&
 up -d` só daquele serviço.
+
+**Secrets do GitHub Actions** (configurados 2026-09-04, um conjunto por repo que faz
+deploy — `iacheiofertas-core`, `-agent-glp`, `-agent-aquarismo`; `-agent-template` e
+`-platform` não deployam nada, não precisam):
+- `SSH_HOST` / `SSH_USER` (`deploy`, usuário dedicado no grupo `docker`, não root) /
+  `SSH_KEY` / `DEPLOY_DIR` — usados pelo job `deploy` do `reusable-ship.yml`.
+- `CORE_CLIENT_DEPLOY_KEY` — deploy key read-only do `iacheiofertas-core-client`,
+  repassada ao build via BuildKit SSH forwarding (ver Dockerfile de cada consumidor:
+  `RUN --mount=type=ssh` + `git config url.insteadOf` reescreve a URL https do
+  `requirements.txt` pra ssh só durante o build).
 
 Manual (do Mac):
 ```sh

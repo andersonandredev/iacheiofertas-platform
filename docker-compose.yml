@@ -20,8 +20,12 @@ services:
     env_file:
       - env/core.env
     environment:
-      - CONFIG_REPO_URL=${CONFIG_REPO_URL:-https://github.com/andersonandredev/iacheiofertas-config}
+      - CONFIG_REPO_URL=${CONFIG_REPO_URL:-git@github.com:andersonandredev/iacheiofertas-config.git}
       - CONFIG_REF=${CONFIG_REF:-main}
+      # Chave de deploy read-only só do iacheiofertas-config, montada abaixo — sem
+      # ssh-agent, um arquivo direto (mais simples em container). accept-new: 1º clone
+      # não trava esperando confirmação manual da host key do github.com.
+      - GIT_SSH_COMMAND=ssh -i /run/secrets/config_deploy_key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/tmp/known_hosts
       - DRY_RUN=${CORE_DRY_RUN:-false}
       # Evolution é resolvido pelo nome de serviço na rede externa compartilhada
       # (o container do infra registra o alias `evolution-api` na rede `iacheiofertas`).
@@ -36,6 +40,7 @@ services:
     volumes:
       # ingest_eventos.db (cooldown/auditoria/teto), links curtos, mídia de curadoria.
       - ${STATE_DIR:-/opt/iacheiofertas/state}/core:/app/state
+      - ${SECRETS_DIR:-/opt/iacheiofertas/secrets}/iacheiofertas_config_deploy_key:/run/secrets/config_deploy_key:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/v1/healthz').status==200 else 1)"]
       interval: 30s
@@ -54,11 +59,16 @@ services:
     environment:
       - CORE_URL=http://core:8000
       - NICHE_ID=achados_glp
-      - CONFIG_REPO_URL=${CONFIG_REPO_URL:-https://github.com/andersonandredev/iacheiofertas-config}
+      - CONFIG_REPO_URL=${CONFIG_REPO_URL:-git@github.com:andersonandredev/iacheiofertas-config.git}
       - CONFIG_REF=${CONFIG_REF:-main}
+      # Chave de deploy read-only só do iacheiofertas-config, montada abaixo — sem
+      # ssh-agent, um arquivo direto (mais simples em container). accept-new: 1º clone
+      # não trava esperando confirmação manual da host key do github.com.
+      - GIT_SSH_COMMAND=ssh -i /run/secrets/config_deploy_key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/tmp/known_hosts
     volumes:
       # dedup do agente: 1 SQLite por nicho (single-writer). Copiado inteiro no cutover.
       - ${STATE_DIR:-/opt/iacheiofertas/state}/agent-glp:/app/state
+      - ${SECRETS_DIR:-/opt/iacheiofertas/secrets}/iacheiofertas_config_deploy_key:/run/secrets/config_deploy_key:ro
     depends_on:
       core:
         condition: service_healthy
@@ -74,10 +84,15 @@ services:
     environment:
       - CORE_URL=http://core:8000
       - NICHE_ID=aquarismo_marinho
-      - CONFIG_REPO_URL=${CONFIG_REPO_URL:-https://github.com/andersonandredev/iacheiofertas-config}
+      - CONFIG_REPO_URL=${CONFIG_REPO_URL:-git@github.com:andersonandredev/iacheiofertas-config.git}
       - CONFIG_REF=${CONFIG_REF:-main}
+      # Chave de deploy read-only só do iacheiofertas-config, montada abaixo — sem
+      # ssh-agent, um arquivo direto (mais simples em container). accept-new: 1º clone
+      # não trava esperando confirmação manual da host key do github.com.
+      - GIT_SSH_COMMAND=ssh -i /run/secrets/config_deploy_key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/tmp/known_hosts
     volumes:
       - ${STATE_DIR:-/opt/iacheiofertas/state}/agent-aquarismo:/app/state
+      - ${SECRETS_DIR:-/opt/iacheiofertas/secrets}/iacheiofertas_config_deploy_key:/run/secrets/config_deploy_key:ro
     depends_on:
       core:
         condition: service_healthy
