@@ -18,9 +18,17 @@ networks:
     external: true
 
 volumes:
+  # `name:` (não `external:`) — se o volume já existir com esse nome, compose só
+  # anexa (dado intacto); se não existir, cria. Cutover: aponte os *_VOLUME pro nome
+  # exato do volume do stack legado (`docker volume ls` lá) pra herdar a sessão do
+  # WhatsApp pareada e o banco do Evolution sem re-parear — ver docs/CUTOVER.md.
+  # Instalação nova (sem legado pra herdar): não define os *_VOLUME, usa o default.
   evolution_instances:
+    name: ${EVOLUTION_INSTANCES_VOLUME:-iacheiofertas_evolution_instances}
   evolution_postgres_data:
+    name: ${EVOLUTION_POSTGRES_VOLUME:-iacheiofertas_evolution_postgres_data}
   evolution_redis_data:
+    name: ${EVOLUTION_REDIS_VOLUME:-iacheiofertas_evolution_redis_data}
 
 services:
   evolution-api:

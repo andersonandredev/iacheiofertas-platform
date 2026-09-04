@@ -3,6 +3,61 @@
 O gargalo do cutover **não é código, é ESTADO de produção**. Um v1 zerado re-dispara
 ofertas já enviadas, perde cooldown e perde a sessão de WhatsApp. Ordem importa.
 
+## Cutover direto (executado 2026-09-04) — variante real, não o piloto gradual abaixo
+
+Decisão do usuário: em vez do piloto gradual (GLP primeiro, dry-run, virar aos poucos —
+seções abaixo, mantidas como referência pra um cutover futuro mais cauteloso), foi feito
+um corte direto — parar o legado inteiro e subir o v1 inteiro — aproveitando uma janela
+de baixo uso. RAM do VPS (3.7GiB, só ~850Mi livre com o legado rodando) não permitia
+coexistência das 2 stacks por muito tempo de qualquer jeito.
+
+**Preparação (sem tocar o legado rodando) feita antes do corte:**
+- `/opt/iacheiofertas/platform` clonado, `/opt/iacheiofertas/state/{core,agent-glp,agent-aquarismo}`
+  e `/opt/iacheiofertas/secrets/` criados.
+- Deploy key read-only do `iacheiofertas-config` gerada NO PRÓPRIO VPS (nunca saiu de
+  lá) em `/opt/iacheiofertas/secrets/iacheiofertas_config_deploy_key`.
+- `env/core.env`, `env/agent-glp.env`, `env/agent-aquarismo.env` e `.env` populados com
+  segredo real (mapeado dos `.env`/`.env.achados_glp` do legado — `DRY_RUN=true` /
+  `CORE_DRY_RUN=true` ligados de propósito no primeiro boot).
+- `docker-compose.infra.yml` ganhou `name:` configurável por env var
+  (`EVOLUTION_INSTANCES_VOLUME`/`EVOLUTION_POSTGRES_VOLUME`/`EVOLUTION_REDIS_VOLUME`) —
+  setado no `.env` pros nomes REAIS do legado (`docker volume ls` no VPS):
+  `core_ofertas_br_evolution_instances`, `core_ofertas_br_postgres_data`,
+  `core_ofertas_br_evolution_redis_data`. Assim o Evolution v1 herda a sessão WhatsApp
+  pareada e o banco, sem re-parear via QR.
+- Imagens (`core`, `agent-glp`, `agent-aquarismo`) buildadas e publicadas no GHCR via CI
+  real (`gh workflow run`, verificado ponta a ponta), já pré-puxadas no VPS
+  (`docker compose pull`).
+- Os dois `docker compose config -q` (app + infra) validam com o env real. **Nada foi
+  iniciado ainda** neste ponto — `docker compose ps` confirmado vazio nos dois projetos.
+
+**O corte em si (não executado ainda na sessão que preparou isso — pendente de
+confirmação explícita do usuário):**
+1. Copiar o estado do legado (tabela "Estado a migrar" abaixo) com os containers
+   legados ainda de pé, mas sabendo que pode haver um `.db` sendo escrito no instante da
+   cópia — aceitável dado o corte é imediato em seguida (não fica dias com os dois no ar
+   como o piloto gradual previa).
+2. `cd /opt/reef-ofertas/core_ofertas_br && docker compose stop app agente agente-achados-glp evolution-api evolution-manager evolution-postgres evolution-redis`
+   — **NÃO** `docker compose down` cru: isso pararia `busca-html-ml`/`busca-html-amazon`/
+   `busca-html-google-shopping` TAMBÉM (mesmo compose file), e o core v1 depende deles
+   rodando (`BUSCA_HTML_*_API_URL` aponta pro `172.17.0.1:812x` desses MESMOS
+   containers — não fazem parte de nenhum compose do `iacheiofertas-*` ainda, ficam fora
+   do escopo desta rodada, continuam geridos como sempre foram no legado). `stop`
+   (não `down`) também preserva os volumes automaticamente, sem precisar do `name:`
+   externo pra eles.
+3. `cd /opt/iacheiofertas/platform && docker compose -p iacheiofertas-infra -f docker-compose.infra.yml up -d`
+   (Evolution v1 sobe já com a sessão herdada).
+4. `docker compose up -d` (core + os 2 agentes, em `DRY_RUN`/`CORE_DRY_RUN=true`).
+5. Validar `/v1/healthz`, `/v1/publish` saindo como `dry_run`, garimpo populando o dedup
+   (o discover já bate nos sidecars de verdade, que continuam de pé desde o passo 2).
+6. Virar `DRY_RUN=false` nos 2 agentes e `CORE_DRY_RUN=false` no `.env`, `docker compose up -d` de novo.
+
+Rollback: `docker compose down` no v1 (app + infra) e `docker compose up -d` de volta no
+`core_ofertas_br` legado — os volumes do Evolution não foram copiados, só reapontados
+(`name:` externo), então nenhum dos dois lados perde a sessão nesse meio tempo.
+
+## Piloto gradual (plano original, não usado neste cutover — referência)
+
 ## Estado a migrar
 
 | Origem (legado) | Destino (v1) | Nota |
