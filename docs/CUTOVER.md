@@ -172,6 +172,23 @@ BRT, scheduler do agente ativo por padrão) publica sozinha. Aquarismo continua 
 **Pendência:** investigar a permissão `instagram_content_publish`/Stories do App/System
 User no Meta Business Suite — fora do escopo de código.
 
+**GLP pausado por completo (2026-09-04 ~23:19 UTC) até a restrição da Meta acabar
+(2026-10-04).** Pedido do usuário: parar garimpo E envio no grupo do WhatsApp enquanto
+o Instagram do GLP estiver bloqueado — não só o Instagram, o nicho inteiro. Aplicado via
+`SCHEDULER_DISABLED=1` em `env/agent-glp.env` no VPS (não existia essa linha no arquivo
+real, só no `.env.example` — precisou ser adicionada, não só editada) + recreate do
+container. Isso desliga rotina_a (garimpo), rotina_b (WhatsApp/grupo) e conteudo_diario
+(carrossel — evita gastar chamada de Anthropic pra um post que ia falhar no Instagram de
+qualquer jeito) de uma vez só. Endpoints manuais (`/rotina-a/run` etc) continuam
+funcionando, só o agendamento automático para. **Aquarismo não é afetado** (scheduler
+próprio, container separado).
+
+**Reverter em 2026-10-04 (ou quando a Meta liberar antes):** `SCHEDULER_DISABLED=0` (ou
+apagar a linha) em `env/agent-glp.env` no VPS + `docker compose up -d agent-glp`, e
+religar `instagram_story` (e talvez `instagram_feed`/`facebook_feed`) em
+`iacheiofertas-config/targets/achados_glp.json`, que ficou só com `whatsapp` desde o
+achado da restrição (ver seção acima).
+
 ### Aquarismo foi ao vivo pra valer — 2026-09-04 ~20:56 UTC (17:56 BRT)
 
 Janela automática das 17:35 BRT confirmada rodando certo em dry_run (registro no
