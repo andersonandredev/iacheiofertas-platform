@@ -56,6 +56,26 @@ Rollback: `docker compose down` no v1 (app + infra) e `docker compose up -d` de 
 `core_ofertas_br` legado — os volumes do Evolution não foram copiados, só reapontados
 (`name:` externo), então nenhum dos dois lados perde a sessão nesse meio tempo.
 
+### Passo 5 executado — achados e correções ao vivo
+
+- `docker exec` no `agent-glp` chamando `POST /rotina-b/run/08:30` contra o `cache.db`
+  real migrado (719 linhas) estourou `TypeError: Candidata.__init__() got an unexpected
+  keyword argument 'legenda'` — `dedup.py::listar_elegiveis` fazia `SELECT *` e o schema
+  do banco legado tem colunas extras que a `Candidata` nova não declara. Corrigido nos
+  3 repos (`agent-template`, `agent-glp`, `agent-aquarismo`) trocando por lista explícita
+  de colunas; regressão coberta em teste; rebuildado via CI e redeployado — reconfirmado
+  `200 {"status": "dry_run", ...}` com produto real nos dois agentes.
+- No mesmo redeploy, `docker compose pull` do CI falhou com `unauthorized`: o usuário
+  `deploy` (o que o job SSH do CI usa, via `SSH_USER`) nunca tinha feito `docker login`
+  no GHCR — só `root` tinha essa credencial de uma sessão manual anterior. Corrigido
+  logando o `deploy` também (ver docs/RUNBOOK.md, seção GHCR). Sem isso, **todo deploy
+  automático via CI ficaria quebrado silenciosamente** nesse ponto, mesmo com a imagem
+  publicada certa no GHCR.
+- `POST /rotina-a/run` (garimpo) demora bastante contra os sidecars reais (timeouts de
+  até 300s por keyword × múltiplas categorias/keywords) — comportamento esperado, mesmo
+  perfil do legado, não é bug. Validação de que populou o dedup fica registrada abaixo
+  quando terminar.
+
 ## Piloto gradual (plano original, não usado neste cutover — referência)
 
 ## Estado a migrar

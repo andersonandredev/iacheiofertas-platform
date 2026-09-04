@@ -40,6 +40,15 @@ docker compose up -d
 Login no GHCR (imagens são privadas): `echo $GHCR_PAT | docker login ghcr.io -u andersonandredev --password-stdin`
 (PAT com escopo `read:packages`).
 
+**IMPORTANTE — logar como o usuário `deploy`, não só `root`:** o job de deploy do CI
+(`reusable-ship.yml`) faz SSH como `SSH_USER` (=`deploy`) e roda `docker compose pull`
+direto — não usa sudo pra root. Login feito só como root não vale pro CI (achado ao
+vivo no cutover 2026-09-04: `docker compose pull` no deploy automático falhou com
+`unauthorized` porque só `root` tinha `~/.docker/config.json` com credencial do GHCR;
+`deploy` nunca tinha logado). Rodar como o próprio `deploy`:
+`sudo -u deploy docker login ghcr.io -u andersonandredev --password-stdin` (senha via
+stdin, nunca em texto/histórico).
+
 ## Deploy
 
 Automático: push em `main` de qualquer repo de serviço → CI builda e faz `compose pull &&
