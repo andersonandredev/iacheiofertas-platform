@@ -172,6 +172,21 @@ BRT, scheduler do agente ativo por padrão) publica sozinha. Aquarismo continua 
 **Pendência:** investigar a permissão `instagram_content_publish`/Stories do App/System
 User no Meta Business Suite — fora do escopo de código.
 
+### Aquarismo foi ao vivo pra valer — 2026-09-04 ~20:56 UTC (17:56 BRT)
+
+Janela automática das 17:35 BRT confirmada rodando certo em dry_run (registro no
+throttle às 20:35:00 UTC, `status: dry_run` nos 2 canais) — provou que o scheduler
+(`rotina_b_<janela>` via `CronTrigger`, absoluto por horário, independe de restart do
+container) está funcionando mesmo sem log HTTP (chamada interna, não via endpoint).
+Usuário pediu pra ligar o envio real também no aquarismo: `DRY_RUN=false` em
+`env/agent-aquarismo.env`, `agent-aquarismo` recriado. `core` já estava com
+`CORE_DRY_RUN=false` desde o GLP. **Os dois nichos (GLP e aquarismo) estão ao vivo de
+produção agora** — próxima janela do aquarismo (18:44 BRT) publica de verdade.
+
+Monitor em background rodando a cada 20min reportando novas ofertas por loja
+(`loja_origem`) em ambos os agentes, pra acompanhar o garimpo automático sem
+intervenção manual.
+
 ## Piloto gradual (plano original, não usado neste cutover — referência)
 
 ## Estado a migrar
