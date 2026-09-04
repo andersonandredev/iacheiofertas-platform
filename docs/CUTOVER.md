@@ -73,8 +73,50 @@ Rollback: `docker compose down` no v1 (app + infra) e `docker compose up -d` de 
   publicada certa no GHCR.
 - `POST /rotina-a/run` (garimpo) demora bastante contra os sidecars reais (timeouts de
   até 300s por keyword × múltiplas categorias/keywords) — comportamento esperado, mesmo
-  perfil do legado, não é bug. Validação de que populou o dedup fica registrada abaixo
-  quando terminar.
+  perfil do legado, não é bug. O ML sidecar (`busca_html_ml`) está sendo bloqueado pela
+  parede `account-verification` do Mercado Livre em quase toda busca (409 Conflict,
+  ~77/78 tentativas nas primeiras 24h de observação) — bloqueio pré-existente/externo,
+  não introduzido pelo cutover, conhecido do usuário. Amazon segue funcionando normal.
+  Dedup populando aos poucos via Amazon enquanto o bloqueio do ML persistir.
+
+**INCIDENTE — 3 domínios públicos derrubados pelo passo 2 (achado e corrigido no mesmo
+cutover, ~19:55-20:00):** `reefofertasbr.iacheiofertas.com.br`, `achadosglp.iacheiofertas.com.br`
+e `curadoria.iacheiofertas.com.br` (Caddy) fazem `reverse_proxy localhost:8000` — porta
+que era do `core_ofertas_app` legado (landing pages `/ofertas/<nicho>`, `/assets/...`,
+portal `/curadoria`) e passou a ser do `core` v1 depois do `docker compose stop app` do
+passo 2. **O core v1 não implementa nenhuma dessas rotas** (só `/v1/*`) — resultado:
+404 nos 3 domínios, incluindo tráfego real de anúncio pago (query strings com
+`utm_source=ig`/`fbclid` vistas nos logs do core v1 caindo em 404). Não estava no
+escopo do cutover direto — essas rotas ficaram pro "cutover do core (últimos endpoints:
+curadoria, conteúdo diário, bot de comentário)" da seção "Piloto gradual" abaixo, que só
+seria feito depois de todo o resto validado; o corte direto pulou essa etapa sem migrar
+essas rotas primeiro.
+
+Correção aplicada (mantém as duas stacks sem colidir):
+1. Porta do `app` no `docker-compose.yml` legado trocada de `8000:8000` pra
+   `127.0.0.1:8001:8000` (só essa linha — backup em `docker-compose.yml.bak-cutover`).
+2. `docker compose up -d app` sobe TAMBÉM `evolution-api`/`postgres`/`redis` legados
+   por `depends_on` — `evolution-api` falhou ao subir por conflito de porta 8080 (a do
+   v1 já estava nela) e isso **preveniu corretamente uma 2ª sessão WhatsApp**; mesmo
+   assim `evolution-postgres`/`evolution-redis` legados subiram à toa — parados de novo
+   (`docker compose stop evolution-postgres evolution-redis`).
+3. `app` legado religado com `docker compose run --rm -d --no-deps -p 127.0.0.1:8001:8000
+   -e CURADORIA_AGENDADOR=0 -e INSTAGRAM_FEED_ROTACAO_JOB=0 --name core_ofertas_app_readonly app`
+   — **crítico**: o `app` sobe por padrão com workers internos (`curadoria-agendador`,
+   checa fila a cada 30s; `instagram-rotacao`, gira bio do IG a cada 6h) que publicam de
+   verdade — rodando em paralelo ao v1 isso duplicaria/conflitaria publicação. Só as
+   rotas HTTP de leitura ficam ativas; nada de scheduler.
+4. `/etc/caddy/Caddyfile` (backup em `/etc/caddy/Caddyfile.bak-cutover-<timestamp>`):
+   os 3 blocos trocados de `reverse_proxy localhost:8000` pra `localhost:8001`,
+   `systemctl reload caddy`. Confirmado 200/200/302 nos 3 domínios reais via HTTPS.
+
+**Pendência real deixada por este atalho:** os 3 domínios hoje dependem de um container
+legado (`core_ofertas_app_readonly`) rodando fora de qualquer `docker-compose.yml` do
+`iacheiofertas-*` — sobrevive a um reboot só se alguém lembrar de resubir manualmente
+(nada de `restart: always` nesse `docker compose run --rm`). Portar `/ofertas/<nicho>`,
+`/assets/...` e `/curadoria` pro `core` v1 (ou um serviço `iacheiofertas-web` dedicado)
+continua como trabalho futuro — até lá, esse container ad-hoc é o que sustenta os 3
+domínios em produção.
 
 ## Piloto gradual (plano original, não usado neste cutover — referência)
 
