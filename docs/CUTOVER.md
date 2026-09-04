@@ -146,6 +146,32 @@ do `agent-aquarismo` — as 25 categorias falharam com `connection refused` (cor
 ar por alguns segundos durante o recreate). Não é bug, só efeito colateral do timing;
 rotina-a pode ser re-rodada.
 
+### GLP foi ao vivo pra valer — 2026-09-04 ~20:15 UTC (17:15 BRT)
+
+Depois do teste no grupo admin confirmado OK, o usuário pediu pra testar o envio real
+numa janela de verdade. Achado ao vivo o `CORE_DRY_RUN` (não `DRY_RUN` de
+`env/core.env` — esse nem existe, é sobrescrito pelo `environment:` do
+`docker-compose.yml`, que lê `CORE_DRY_RUN` do `.env` de topo) e o `DRY_RUN` do
+`env/agent-glp.env` viraram `false`; `POST /rotina-b/run/08:30` manual no `agent-glp`
+resultou em `status: partial`:
+- **`whatsapp`: `sent`** — primeira publicação REAL da migração, foi pro grupo real
+  "Achados GLP" (confirmado pelo usuário).
+- **`instagram_story`: `error`** — `(#10) Application does not have permission for this
+  action` (Graph API). Não é bug de código — reproduzido manualmente, token correto
+  (197 chars, válido), payload idêntico ao do legado (`core_ofertas_br/app/instagram.py`,
+  mesma assinatura/parâmetros). É estado atual do lado Meta — possivelmente relacionado à
+  verificação de empresa/MEI no Meta Business feita pelo usuário nos mesmos dias
+  (ver memória `reef_ofertas_mei_validacao_empresa`). Não bloqueia o WhatsApp — canais
+  são independentes (`_status_agregado` em `publish.py`).
+
+Usuário optou por **deixar `DRY_RUN=false` ligado** pro GLP (não reverter) — a partir
+daqui o GLP está ao vivo de verdade em produção; a janela automática seguinte (17:35
+BRT, scheduler do agente ativo por padrão) publica sozinha. Aquarismo continua em
+`DRY_RUN=true`, não foi tocado.
+
+**Pendência:** investigar a permissão `instagram_content_publish`/Stories do App/System
+User no Meta Business Suite — fora do escopo de código.
+
 ## Piloto gradual (plano original, não usado neste cutover — referência)
 
 ## Estado a migrar
