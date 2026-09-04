@@ -187,6 +187,34 @@ Monitor em background rodando a cada 20min reportando novas ofertas por loja
 (`loja_origem`) em ambos os agentes, pra acompanhar o garimpo automático sem
 intervenção manual.
 
+### ML desbloqueado via sidecar existente no Mac (sem custo de proxy) — 2026-09-04 ~21:00 UTC
+
+O bloqueio do ML (`account-verification`, 409) é só no IP do VPS Hetzner — descoberto
+que o Mac do usuário já tinha infra pronta de antes (`~/Library/LaunchAgents/com.reef.sidecartunnel.plist`,
+autossh com `KeepAlive`, túnel reverso `-R 172.17.0.1:18123:localhost:8123` etc pro
+Hetzner) com 2 sidecars ML locais (`busca_html_ml` porta 8123→túnel 18123,
+`busca_html_ml_2` porta 8126→túnel 18126) rodando havia dias, MAS não plugados em
+lugar nenhum do v1. Testado: busca real via `http://172.17.0.1:18123/busca` (do VPS,
+pelo túnel) retorna resultados de verdade da lista do ML — **IP do Mac não está
+bloqueado**, confirma que o bloqueio é por reputação de IP datacenter, não por
+fingerprint do Selenium.
+
+Fix: `.env` de topo do VPS —
+`BUSCA_HTML_ML_API_URL=http://172.17.0.1:18123` (era `http://172.17.0.1:8123`, o
+sidecar bloqueado do próprio VPS) e `BUSCA_HTML_ML_2_API_URL=http://172.17.0.1:8123`
+(o antigo vira secundário — `core`/`mercadolivre.py::_sidecars_ml()` já tenta os dois
+em sequência por keyword, sem mudança de código, só de env). `core` recreated,
+testado (`buscar_ofertas_por_palavra_chave` retornando resultados reais). Beneficia
+GLP e aquarismo juntos (config do `core`, não por nicho).
+
+**Fragilidade aceita:** garimpo de ML agora depende do Mac estar ligado, conectado e
+com o túnel de pé (`launchctl list com.reef.sidecartunnel`, log em
+`~/Library/Logs/reef-sidecartunnel.log`) — se cair, falha silenciosa (core trata
+timeout/erro de rede como sidecar "fora do ar", retorna `[]`, não quebra nada, só
+volta a ficar sem resultado de ML até o Mac voltar). Considerar contratar proxy
+residencial (Webshare/IPRoyal, mais barato pra testar) se essa dependência incomodar
+no longo prazo.
+
 ## Piloto gradual (plano original, não usado neste cutover — referência)
 
 ## Estado a migrar
