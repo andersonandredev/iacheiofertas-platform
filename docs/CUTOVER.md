@@ -118,6 +118,34 @@ legado (`core_ofertas_app_readonly`) rodando fora de qualquer `docker-compose.ym
 continua como trabalho futuro — até lá, esse container ad-hoc é o que sustenta os 3
 domínios em produção.
 
+### Teste de envio real (grupo admin) — 2 achados ao vivo, ambos corrigidos
+
+Pedido do usuário: validar que o WhatsApp v1 consegue **enviar** de verdade (não só
+ficar conectado) antes de virar `DRY_RUN=false` pra valer. Dois problemas apareceram:
+
+1. **`EVOLUTION_INSTANCE_NAME` errado no `core.env` do VPS** (`iacheiofertas` em vez de
+   `reef-ofertas`, o nome real da instância herdada) — todo envio real teria falhado com
+   `404 Not Found` em `/message/sendText/<instance>`. `/v1/healthz` não pega esse tipo de
+   erro (não testa envio). Corrigido no `core.env`, `core` recriado, confirmado via
+   `curl .../instance/fetchInstances` (`name: "reef-ofertas"`, `connectionStatus: "open"`).
+2. **Primeiro teste foi pro grupo errado.** Usei `EVOLUTION_GROUP_JID` do `.env` legado
+   assumindo que era o grupo interno/admin — na verdade é o MESMO JID do grupo real
+   **Reef Ofertas BR** (cliente de verdade, `aquarismo-marinho-principal`). Mensagem de
+   teste chegou lá por engano; revogada (`chat/deleteMessageForEveryone`, aceita pelo
+   Evolution) e o usuário também apagou manualmente. JID certo do grupo admin
+   (**Admin IAcheiofertas.com.br**, `120363408747651331@g.us`) descoberto via
+   `group/fetchAllGroups` e documentado em `iacheiofertas-config/README.md` pra nunca
+   mais confundir. Reenviado com sucesso no grupo certo, confirmado pelo usuário.
+
+**Lição:** `EVOLUTION_GROUP_JID` (sem sufixo de nicho) no `.env` legado é enganoso pelo
+nome — não usar pra nada em v1. Único JID de teste seguro é o do Admin, documentado no
+config repo.
+
+Efeito colateral: o restart do `core` pra aplicar o fix #1 aconteceu no meio da rotina-a
+do `agent-aquarismo` — as 25 categorias falharam com `connection refused` (core fora do
+ar por alguns segundos durante o recreate). Não é bug, só efeito colateral do timing;
+rotina-a pode ser re-rodada.
+
 ## Piloto gradual (plano original, não usado neste cutover — referência)
 
 ## Estado a migrar
