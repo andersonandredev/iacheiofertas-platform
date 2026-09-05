@@ -244,6 +244,14 @@ components:
         drop_pct:
           type: integer
           nullable: true
+        rating:
+          type: number
+          nullable: true
+          description: nota média do produto (0-5), quando a loja expõe — hoje só Amazon
+        rating_count:
+          type: integer
+          nullable: true
+          description: total de avaliações do produto, quando a loja expõe — hoje só Amazon
         flags:
           $ref: "#/components/schemas/OfferFlags"
 
