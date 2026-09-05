@@ -456,6 +456,26 @@ meio. Hipótese mais provável: o formulário exigia digitar tudo (incluindo upl
 foto) sem nenhum atalho, e a tentativa foi abandonada antes de enviar — resolvido pela
 própria feature desta seção.
 
+### Curadoria manual ganha legenda por IA — 2026-09-05 ~02:50 UTC
+
+Pergunta do usuário: "os textos e tags estão seguindo as regras do legado? A IA gera os
+textos pelo agente?" — não estavam: o form exigia legenda 100% digitada à mão, sem
+hashtag nenhuma, diferente de `core_ofertas_br/app/curadoria_texto.py::
+gerar_textos_anuncio` (Anthropic, gancho + 4-6 hashtags + trava de saúde do GLP no
+prompt). Corrigido com `app/anthropic_client.py::gerar_legenda_curadoria` (novo) —
+chamado só quando o campo de legenda fica em branco. Adaptado ao padrão JÁ estabelecido
+nos outros 3 geradores desse módulo (hashtags específicas do nicho, nunca genéricas, via
+o mesmo formato JSON) em vez de re-portar o fallback genérico do legado
+(`#achados #oferta #promo #brasil`, que virou só o fallback de ÚLTIMO caso — sem chave,
+nicho sem persona, falha de rede/JSON). Reusa `PERSONAS_NICHO` (já tem a trava "nunca
+promete resultado garantido" do GLP embutida) em vez de duplicar a regra de compliance
+em outro lugar. Preço/desconto/link continuam SEMPRE determinísticos, nunca vêm da IA.
+
+Diferença deliberada do legado, não corrigida agora: um texto só (sem "comentário"
+separado pro 1º comentário do Instagram) — v1 põe o link direto no texto da publicação,
+não na estratégia de 1º comentário (decisão já tomada antes nesta sessão, ver
+app/publish.py).
+
 ## Piloto gradual (plano original, não usado neste cutover — referência)
 
 ## Estado a migrar
