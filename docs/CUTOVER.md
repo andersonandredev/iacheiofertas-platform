@@ -437,6 +437,25 @@ Validado ao vivo nos dois domínios públicos reais: 84 cards em cada um (24 env
 garimpadas, os limites default), filtro de loja com Mercado Livre/Amazon/Shopee
 aparecendo de verdade — resolve tanto o pedido quanto a página vazia da seção anterior.
 
+### Curadoria manual ganha "escolher da lista" + painel embutido — 2026-09-05 ~02:30 UTC
+
+Pedido do usuário: trazer de volta do legado a lista de ofertas garimpadas pra escolher
+no disparo manual (em vez de digitar link/preço/foto do zero toda vez) + os painéis de
+monitoramento dentro do portal. `GET /curadoria/garimpadas` reusa o MESMO `GET /ofertas`
+de cada agente que já alimenta a vitrine pública — "Usar esta oferta" pré-preenche o
+formulário (link, título, preço, e a FOTO DA LOJA já resolvida, dispensando upload).
+`GET /curadoria/painel` junta publicações/erros do core (`throttle.py`) com garimpo por
+loja de cada agente numa página só. Diferente do legado: continua sem fila de "pendente
+de aprovação humana" — é só atalho pra não digitar à mão, o agente publica sozinho em
+paralelo sem relação com a escolha manual.
+
+No caminho, investigando por que uma publicação manual anterior do usuário não tinha
+aparecido na vitrine: `throttle.publicacoes` não tinha nenhuma chave `curadoria-manual:`
+— os logs do `core` só mostravam login seguido de logout, sem POST em `/curadoria` no
+meio. Hipótese mais provável: o formulário exigia digitar tudo (incluindo upload de
+foto) sem nenhum atalho, e a tentativa foi abandonada antes de enviar — resolvido pela
+própria feature desta seção.
+
 ## Piloto gradual (plano original, não usado neste cutover — referência)
 
 ## Estado a migrar
