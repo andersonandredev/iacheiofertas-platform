@@ -183,6 +183,27 @@ qualquer jeito) de uma vez só. Endpoints manuais (`/rotina-a/run` etc) continua
 funcionando, só o agendamento automático para. **Aquarismo não é afetado** (scheduler
 próprio, container separado).
 
+### Painel gerencial + envio manual da curadoria — reconectados ao v1 (2026-09-04 ~23:50 UTC)
+
+Dois achados do usuário, mesma causa raiz: o `core_ofertas_app_readonly` (container
+legado que sustenta os 3 domínios públicos + curadoria, ver acima) só estava na rede
+docker `core_ofertas_br_reef-net`, não na `iacheiofertas` (rede da stack v1) — não
+resolvia nem `evolution-api` nem `core`/`agent-glp`/`agent-aquarismo` por nome.
+
+1. **Envio manual da curadoria não funcionava** — log real: `Failed to resolve
+   'evolution-api'`. Fix: `docker network connect iacheiofertas core_ofertas_app_readonly`
+   (feito ao vivo, não persiste num recreate do container — considerar adicionar ao
+   comando que sobe esse container, ver seção do incidente dos 3 domínios acima).
+2. **Painel gerencial (`/curadoria/painel`) desatualizado** — lia `ingest_eventos.db`/
+   `cache.db` locais, que pararam de ser escritos desde o cutover (quem processa de
+   verdade agora é a stack v1). Reescrito `core_ofertas_br/app/painel.py` +
+   `curadoria_paginas.py` (branch `fix/painel-v1`, não pushado — repo legado sem CI)
+   pra buscar via HTTP: `GET /v1/admin/painel` no core (publicações/erros — novo
+   endpoint, lê a mesma tabela `publicacoes` que já decide replay/cooldown) + `GET
+   /admin/garimpo-resumo` em cada agent-* v1 (novo endpoint, garimpo por loja).
+   Validado ao vivo com dado real: publicações reais do dia, ~1150 itens de garimpo
+   por loja nos 2 nichos, GLP aparecendo `scheduler_disabled=True` corretamente.
+
 **Reverter em 2026-10-04 (ou quando a Meta liberar antes):** `SCHEDULER_DISABLED=0` (ou
 apagar a linha) em `env/agent-glp.env` no VPS + `docker compose up -d agent-glp`, e
 religar `instagram_story` (e talvez `instagram_feed`/`facebook_feed`) em
@@ -251,6 +272,24 @@ posts backdatados pra 8 dias; `feed_rotacao.rodar_rotacao()` chamado manualmente
 `{"apagados": 2, "falhas": 0}`; confirmado por `GET` direto na Graph API que os 2
 posts de teste realmente sumiram do Instagram/Facebook. Sem custo de proxy ou infra
 nova — só o worker já embutido no `core`.
+
+**Gap achado ao testar o carrossel diário pra valer (não em dry_run):** o Caddy só
+tinha `/r/*` roteado pro `core` v1 em `iacheiofertas.com.br` — `/static/conteudo/*`
+(slides do carrossel) e `/static/imagens-produto/*` (foto normalizada, ver achado
+abaixo) não eram alcançáveis publicamente, e a Graph API precisa buscar essas imagens
+por URL pública. Corrigido: bloco `handle /static/* { reverse_proxy localhost:8000 }`
+adicionado ao lado do `/r/*` (backup do Caddyfile salvo antes). Achado ANTES do
+primeiro carrossel real disparar (só tinha sido testado em `dry_run`, que não chega a
+gerar/servir as imagens) — sem isso o carrossel real teria falhado.
+
+**Achado ao vivo (curadoria manual + confirmado no fluxo automático): proporção de
+imagem rejeitada pelo Instagram.** Uma foto da Amazon caiu em `(#36003) The aspect
+ratio is not supported` no feed, mesmo tendo passado na Story do mesmo envio — cada
+superfície valida proporção diferente (feed: 4:5 a 1.91:1), foto crua de loja não tem
+proporção previsível. Fix: `app/imagem_produto.py` (novo) — toda foto de produto
+(feed E Story) é renderizada num canvas 4:5 seguro antes de publicar (fundo desfocado
+da própria foto + foto nítida por cima, mesma técnica do carrossel), eliminando a
+classe de erro inteira em vez de tentar validar a proporção de antemão.
 
 ## Piloto gradual (plano original, não usado neste cutover — referência)
 
