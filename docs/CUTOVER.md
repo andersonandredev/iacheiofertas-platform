@@ -407,6 +407,36 @@ foi validada à exaustão nas seções acima, reusa os MESMOS senders).
 `core_ofertas_app_readonly` fica sem nenhum uso público conhecido depois dessa mudança —
 só falta confirmar que nada mais aponta pra ele antes de desligar de vez (ver pendências).
 
+### Vitrine ganha "enviadas" + "garimpadas com desconto" com filtro e busca — 2026-09-05 ~01:20 UTC
+
+Pedido do usuário, revisitando o corte da Fase 1: trazer de volta as funcionalidades do
+legado que tinham ficado de fora do MVP enxuto — lista de ofertas enviadas, lista de
+TODAS as garimpadas com desconto (não só as publicadas), com filtro de loja e busca por
+palavra. No caminho, achado real que motivou a mudança de fonte de dado: a vitrine só
+lia `throttle.publicacoes` do `core`, que só passou a guardar o conteúdo da oferta
+(`oferta_json`) a partir do fix de hoje — ou seja, ficaria vazia por horas até o próximo
+publish automático, mesmo o agente já tendo **meses de garimpo real** (1159 ofertas no
+GLP, 255 no Aquarismo, checado ao vivo) parado ali sem uso.
+
+Fix: a vitrine agora busca o catálogo direto do **agente** de cada nicho (`GET /ofertas`,
+novo em `iacheiofertas-agent-template` + propagado pros dois forks — filtra por busca/
+loja/desconto/enviada em SQL, ver `app/dedup.py::listar_ofertas`) em vez de só do
+`core`. Mantém a arquitetura: a dedup/garimpo continua dona do dado (ver
+docs/ARCHITECTURE.md), o `core` só lê por HTTP (`agent-glp:8000`/`agent-aquarismo:8000`
+— mesma rede docker `iacheiofertas`, sem proxy novo), nunca duplica a base. Falha ao
+falar com o agente (fora do ar/timeout) degrada pra seção vazia — e se as duas seções do
+agente vierem vazias, cai de volta pro `throttle.publicacoes` do core (fallback,
+não quebra a página).
+
+Filtro de loja (botões) + busca por palavra (campo de texto) são client-side — mesmo
+espírito do legado (`data-loja`/`data-titulo` nos cards + um punhado de JS puro), sem
+round-trip ao servidor por interação. Categoria fica de fora dessa volta (loja + busca
+já cobre o essencial).
+
+Validado ao vivo nos dois domínios públicos reais: 84 cards em cada um (24 enviadas + 60
+garimpadas, os limites default), filtro de loja com Mercado Livre/Amazon/Shopee
+aparecendo de verdade — resolve tanto o pedido quanto a página vazia da seção anterior.
+
 ## Piloto gradual (plano original, não usado neste cutover — referência)
 
 ## Estado a migrar
