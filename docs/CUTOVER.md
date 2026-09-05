@@ -364,6 +364,49 @@ HTML novo confirmado por `curl`, CTA de WhatsApp e logo corretos. `curadoria.
 iacheiofertas.com.br` continua em `:8001` (Fase 2, ainda não portada) — único uso restante
 de `core_ofertas_app_readonly` depois dessa mudança.
 
+**Achado no mesmo dia, reportado pelo usuário ao ver a página no ar:** o mesmo produto
+regarimpado/republicado em dias diferentes (preço reconferido) aparecia duplicado na
+grade, empurrando ofertas diferentes pra fora. Corrigido em
+`throttle.ofertas_publicas_recentes` — dedup por `product_url`, mantendo só a ocorrência
+mais recente — junto com um índice `(niche_id, criado_em)` pra não degradar conforme a
+tabela `publicacoes` cresce (só cresce, nunca é podada; aceitável por ora, revisar se
+virar gargalo de verdade).
+
+### Curadoria manual v1 — disparo imediato, `curadoria.iacheiofertas.com.br` migrada — 2026-09-05 ~01:05 UTC
+
+Fase 2 da retirada do legado: `core_ofertas_br/app/curadoria.py` (~2000 linhas — fila
+rascunho/pronto/agendado, edição de pendente, legenda gerada por IA, regerar/desagendar/
+excluir, revisão de "garimpadas" antes de publicar, histórico). Escopo real re-surfaced
+pro usuário via pergunta explícita antes de começar; escolha: **enxuto, só disparo
+imediato** — sem fila/agendamento/edição, sem revisão de garimpadas (os agentes v1 hoje
+publicam sozinhos sem revisão humana, o conceito nem existe na arquitetura nova).
+
+Implementado em `iacheiofertas-core` (`app/curadoria_manual.py`, rotas `GET/POST
+/curadoria` + `/curadoria/login` + `/curadoria/logout`): login com cookie assinado por
+HMAC (`CURADORIA_SECRET`, sem sessão em memória — sobrevive a restart do container),
+upload de 1 foto, formulário único (nicho, link real do produto, legenda, preço opcional,
+canais), botão "publicar agora". Publica DIRETO via `app/publish.py::CHANNEL_SENDERS`
+(bypass ACL/cooldown/teto de propósito — mesma semântica do legado: humano já decidiu,
+não é fluxo automático), e só registra em `throttle.registrar_publicacao` (aparece no
+painel e na vitrine pública, ver seção acima) — nunca em `registrar_envio` (não mexe no
+cooldown/teto do fluxo automático). `CURADORIA_USER`/`PASS`/`SECRET` vazios desligam o
+portal inteiro (404) em vez de subir com login impossível de passar.
+
+Deploy: credenciais geradas direto no `env/core.env` do VPS (usuário `admin`, senha e
+secret aleatórios via `openssl rand`, nunca passados por um comando cujo output volta pro
+histórico do agente). Caddyfile: `curadoria.iacheiofertas.com.br` trocou `:8001` →
+`:8000` e o redirect de raiz (`@portal_root path / /curadoria` → `redir .../curadoria/`)
+virou `@raiz path /` → `redir /curadoria` (sem barra final — as rotas do v1 não usam
+trailing slash). Fotos enviadas pelo portal saem por `BASE_URL` (`iacheiofertas.com.br/
+static/midia-manual/...`), já coberto pelo `handle /static/*` existente — sem mudança
+extra de proxy pra isso. Validado ao vivo: login real com as credenciais geradas, sessão
+persistindo entre requests, formulário renderizando autenticado — disparo real não
+testado nessa validação (evitar criar post de teste desnecessário; a publicação em si já
+foi validada à exaustão nas seções acima, reusa os MESMOS senders).
+
+`core_ofertas_app_readonly` fica sem nenhum uso público conhecido depois dessa mudança —
+só falta confirmar que nada mais aponta pra ele antes de desligar de vez (ver pendências).
+
 ## Piloto gradual (plano original, não usado neste cutover — referência)
 
 ## Estado a migrar
