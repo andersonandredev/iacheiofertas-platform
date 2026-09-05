@@ -476,6 +476,59 @@ separado pro 1º comentário do Instagram) — v1 põe o link direto no texto da
 não na estratégia de 1º comentário (decisão já tomada antes nesta sessão, ver
 app/publish.py).
 
+### `core_ofertas_app_readonly` PARADO — auditoria de tráfego real — 2026-09-05 ~02:55 UTC
+
+Usuário perguntou o que falta pra concluir a retirada do legado. Auditoria real (não só
+inferência): `docker logs core_ofertas_app_readonly --since <hora da migração dos 3
+domínios>` deu **zero requisições** — confirmando que reefofertasbr/achadosglp/curadoria
+não dependem mais dele. As requisições que eu tinha visto antes (garimpadas/painel/
+publicar manual) eram todas de ANTES da migração dos domínios (23:54-00:11 UTC) — isso
+fecha o mistério do "envio manual não aparece no carrossel" de uma seção atrás: foi
+feito no portal LEGADO, antes do v1 ter esse recurso.
+
+Container **parado** (`docker stop`, não removido — margem de segurança). Validado ao
+vivo com ele desligado: os 3 domínios continuam respondendo 200/302 normalmente.
+
+**Achado que NÃO é só cosmético**: o bot de comentário do Instagram (Frente B, ver
+memória `reef_ofertas_bot_comentarios`) rodava DENTRO desse mesmo container
+(`app/webhooks/instagram.py` → `app/bot_comentarios.py`). Tinha **zero hits nas últimas
+48h** antes de eu parar — ou seja, o webhook da Meta já não estava sendo chamado de
+verdade (provavelmente aponta pra uma URL que não existe mais desde o rebrand pro
+domínio iacheiofertas.com.br). Essa feature nunca foi portada pro v1 — é uma pendência
+REAL de produto, não só infraestrutura parada. Decisão de negócio pendente: reconfigurar
+o webhook + portar `bot_comentarios.py`, ou aceitar que fica desativada.
+
+Confirmado também: os sidecars `busca_html_amazon`/`busca_html_ml`/
+`busca_html_google_shopping` continuam rodando e em uso ATIVO pelo v1
+(`BUSCA_HTML_*_API_URL`) — não são legado a desligar, são infraestrutura compartilhada.
+
+### Dedup de "melhor preço entre lojas" no garimpo — nunca tinha sido portado — 2026-09-05 ~10:20 UTC
+
+Pergunta do usuário: "o tratamento de consulta do preço das ofertas com menor preço nas
+três lojas antes de enviar implementou igual estava no legado?" — resposta real, depois
+de checar o código: **não**. O recurso existe (achado em `agente_ofertas_br/app/
+gemini.py::_deduplicar`, não em `core_ofertas_br` como eu tinha assumido antes) e nunca
+foi portado pro v1. Descoberto lá em 2026-08-28: desconto% mais alto não garante menor
+preço final — sem esse dedup, o mesmo produto minerado em lojas diferentes (mesmo
+anúncio replicado, ou vendedor diferente do mesmo dropship) virava candidatas
+independentes no dedup local, e a seleção de envio (`app/selection.py`, que despacha só
+por maior desconto%) podia escolher a mais CARA das duas.
+
+Portado como `app/dedup_produto.py` (novo, idêntico nos 3 repos de agente) — agrupa
+candidatas do mesmo produto por overlap de palavras do título (limiar 0.5, mesmo do
+legado) e mantém só a de menor `price_current` do grupo. Chamado em `app/discovery.py`
+logo após `POST /v1/discover`, antes de qualquer outro gate do nicho.
+
+**Quase-incidente evitado**: copiar `discovery.py` do template por cima dos dois forks
+(mesmo procedimento usado antes pra `dedup.py`/`main.py`, que SÃO idênticos entre os 3)
+apagou os gates de compliance específicos de cada nicho — GLP perdeu o filtro de claim
+de saúde, aquarismo perdeu os dois (compliance + "só do catálogo"). Pego pelo teste
+`test_rotina_a_aplica_os_2_gates_de_verdade` do aquarismo falhando antes de qualquer
+commit. Revertido (`git checkout`) e reaplicado à mão, inserindo só a chamada nova no
+lugar certo de cada arquivo real. Lição: `discovery.py`/`selection.py`/`niche.py` são
+forkados de propósito (lógica de nicho), nunca sincronizar por cópia cega como os
+arquivos genéricos do template.
+
 ## Piloto gradual (plano original, não usado neste cutover — referência)
 
 ## Estado a migrar
