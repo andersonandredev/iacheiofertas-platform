@@ -291,6 +291,79 @@ proporção previsível. Fix: `app/imagem_produto.py` (novo) — toda foto de pr
 da própria foto + foto nítida por cima, mesma técnica do carrossel), eliminando a
 classe de erro inteira em vez de tentar validar a proporção de antemão.
 
+### Carrossel diário + Reels semanal com avatar, ponta a ponta no v1 — 2026-09-05 ~00:35 UTC
+
+Pedido do usuário: portar pro `core` o conteúdo diário/semanal do legado (roteiro via
+Anthropic, carrossel de imagens, Reels com avatar HeyGen) — escopo real bem maior que a
+estimativa inicial (~1200 linhas vs. o que existia de fato: sem utilitário de imagem, sem
+publish de carrossel/Reels no v1 ainda), re-confirmado com o usuário no meio do trabalho
+("seguir com os 2 mesmo assim"). Novo no `core`: `app/anthropic_client.py` (roteiro +
+legenda), `app/carrossel.py` + `app/imagem_utils.py` (slides), `app/heygen.py` (render do
+avatar), `app/roteiros.py` (histórico), `app/content.py` (orquestra os dois fluxos,
+`dry_run` primeiro); `app/instagram.py` ganhou `publicar_carrossel`/`publicar_reels`. Novo
+no agente (template + glp + aquarismo): `app/conteudo_diario.py`/`video_avatar.py`,
+schedule via `CronTrigger` (sobrevive a redeploy no meio do dia).
+
+**3 achados ao vivo, todos corrigidos antes do disparo real:**
+1. `max_tokens` da Anthropic baixo demais matava a resposta (thinking consumia tudo) —
+   subido pra 2000-3000 conforme o prompt.
+2. Roteiro do vídeo semanal "vazava" pra formato de roteiro de cena em vez de JSON —
+   reforçado no prompt que a resposta INTEIRA é o objeto JSON.
+3. `ROTEIROS_DB_PATH` nunca setado no `env/core.env` real (só o default relativo do
+   `config.py`) — roteiros gerados iam pro filesystem efêmero do container, não pro
+   volume persistente. Achado por um Monitor de polling ficar horas voltando vazio;
+   confirmado que nenhum dado real se perdeu (todos os testes até então eram
+   `dry_run`, que não chega a gravar). Corrigido minutos antes do 1º disparo real.
+
+**1º disparo real (carrossel diário do aquarismo, 00:25 UTC) "sumiu" — investigado e
+corrigido:** `POST /v1/content/daily` voltou 200 mas nenhum post apareceu. Causa:
+`media_publish` da Graph API deu 400 mesmo com o container já `FINISHED` — reproduzido à
+mão (a mesma chamada, segundos depois, funcionou sem mudar nada; a reprodução criou um
+post de teste real, apagado em seguida via `apagar_media`). Corrigido com retry curto (3
+tentativas, 3s) em `instagram.py::publicar_container`. Disparo real re-executado na
+sequência via `POST /conteudo-diario/run` (o cron só dispara uma vez por dia) — publicou
+de verdade: carrossel real no Instagram (`Dc4r-4GjOY3`) + espelho no Facebook.
+
+Decisões de negócio do usuário nesse meio-tempo: aquarismo ganha 2 vídeos/semana (um
+delas cobrindo o slot de quinta do GLP pausado) até a restrição da Meta no GLP acabar —
+`VIDEO_SEMANAL_EXTRA_*` no `iacheiofertas-agent-aquarismo`, documentado como temporário.
+
+### Painel + vitrine pública v1, retirada do legado começou de vez — 2026-09-05 ~00:50 UTC
+
+Usuário autorizou "missão do dia": desligar 100% do que ainda depende do legado
+(`core_ofertas_br`/`core_ofertas_app_readonly`). Levantamento achou 5 frentes; a maior —
+landing pages públicas (`reefofertasbr`/`achadosglp.iacheiofertas.com.br`, hoje servidas
+por `core_ofertas_app_readonly:8001`) — foi a primeira a sair. Lendo o código de verdade
+(`core_ofertas_br/app/pagina_ofertas.py`, 838 linhas: cache de convite ao vivo,
+garimpadas ainda não enviadas, dedup de produto entre lojas, prova social por
+seguidores), ficou claro que não é uma "lista de ofertas" simples — resurfaced pro
+usuário via pergunta explícita, que escolheu **enxuta primeiro, evoluir depois** em vez
+de port fiel.
+
+Implementado em `iacheiofertas-core` (`app/vitrine.py`, `GET /ofertas/{niche_id}`): grade
+de ofertas reais recentes + CTA fixo de WhatsApp + logo do nicho, sem template engine.
+Peças que ficaram de fora dessa Fase 1 (candidatas a Fase 2 se fizerem falta na prática):
+seção de garimpadas, dedup entre fontes, prova social, filtro de loja, revalidação ao
+vivo do link de convite (aqui é estático, em `destinations/<id>.json` — `chat.whatsapp.
+com/...` capturado direto da Evolution API e editado à mão se o grupo for resetado).
+
+Achado no caminho: `throttle.publicacoes` guardava só o RESULTADO de cada publish (canal/
+outcome), nunca o conteúdo da oferta (título/imagem/preço) — sem isso a vitrine não tinha
+o que mostrar. Corrigido com uma coluna nova (`oferta_json`, migração via `ALTER TABLE`
+numa tabela que já existe em produção) + `throttle.ofertas_publicas_recentes(niche_id)`,
+que só considera publicações com pelo menos um canal `outcome=sent` de verdade (nunca
+`dry_run`/replay). Consequência aceita: publicações de ANTES dessa mudança não aparecem
+na vitrine (o dado original nunca foi salvo) — as páginas foram ao ar vazias
+("Nenhuma oferta publicada ainda") e vão se preencher sozinhas com o garimpo normal do
+dia a dia, sem backfill artificial.
+
+Deploy: `iacheiofertas-config` ganhou `whatsapp_invite_url` nos dois destinos; Caddyfile
+do VPS trocou `reverse_proxy localhost:8001` → `localhost:8000` nos dois domínios
+(backup salvo antes). Validado ao vivo nos dois domínios públicos reais — resposta 200,
+HTML novo confirmado por `curl`, CTA de WhatsApp e logo corretos. `curadoria.
+iacheiofertas.com.br` continua em `:8001` (Fase 2, ainda não portada) — único uso restante
+de `core_ofertas_app_readonly` depois dessa mudança.
+
 ## Piloto gradual (plano original, não usado neste cutover — referência)
 
 ## Estado a migrar
