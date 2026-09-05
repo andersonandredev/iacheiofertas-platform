@@ -529,6 +529,24 @@ lugar certo de cada arquivo real. Lição: `discovery.py`/`selection.py`/`niche.
 forkados de propósito (lógica de nicho), nunca sincronizar por cópia cega como os
 arquivos genéricos do template.
 
+### Curadoria manual: fila/agendamento completa (P4) — 2026-09-05 ~10:35 UTC
+
+Pedido do usuário (P4 do plano combinado — perguntei antes se o disparo imediato já
+bastava, resposta: "quero o fluxo completo do legado"; motivo dado depois: o rascunho
+importa principalmente pra revisar o texto que a IA escreveu antes de ir ao ar).
+
+Novo: `app/curadoria_fila.py` (SQLite dedicado, rascunho/pronto/agendado/disparando/
+publicado/erro) + `app/curadoria_agendador.py` (worker `BackgroundScheduler`, mesmo
+padrão de `app/feed_rotacao.py`, dispara agendamento vencido a cada 30s por padrão).
+"Publicar agora" continua sem fila (comportamento original, zero review) — as outras 3
+ações (rascunho/pronto/agendar) criam uma linha e caem na tela de EDIÇÃO pra revisão,
+igual o legado fazia. Nova aba "Fila" na navegação.
+
+Validado ao vivo em produção, ponta a ponta, SEM disparar nada de verdade: login →
+criar rascunho ("Teste fila") → apareceu na lista da fila com badge correto → tela de
+edição mostrou os botões (Disparar agora/Regerar/Excluir) → excluído → fila voltou
+vazia. 22 testes novos.
+
 ## Piloto gradual (plano original, não usado neste cutover — referência)
 
 ## Estado a migrar
