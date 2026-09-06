@@ -205,6 +205,10 @@ components:
             rating_score:
               type: number
               nullable: true
+            keyword:
+              type: string
+              nullable: true
+              description: termo de busca que gerou esta candidata (POST /v1/discover); só o Corte Atemporal usa hoje, pra medir rendimento por termo
 
     EnrichRequest:
       type: object
