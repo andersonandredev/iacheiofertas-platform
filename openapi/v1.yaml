@@ -358,6 +358,10 @@ components:
       properties:
         fast_shipping:
           type: boolean
+          description: >-
+            entrega rápida / fulfillment da loja — selo "Enviado pelo FULL" no
+            Mercado Livre, Prime na Amazon. Preenchido no /enrich do Mercado Livre;
+            ausente quando o sidecar não reporta o selo.
         trusted_store:
           type: boolean
 
