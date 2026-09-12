@@ -158,6 +158,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/WhatsappImagemResponse"
 
+  /v1/instagram/postar-imagem:
+    post:
+      operationId: instagramPostarImagem
+      summary: Posta 1 imagem, um carrossel (2-10) ou Stories num destino de Instagram
+      description: >
+        Mesmo espírito do /v1/whatsapp/enviar-imagem — fora da semântica de Offer do
+        /v1/publish. `image_url` publica 1 imagem no feed; `image_urls` (2-10) publica
+        um carrossel (ex. Corte Atemporal: foto da peça + manequim com marca d'água);
+        `story=true` publica em Stories (só 1 imagem, sem legenda). Token resolvido por
+        nicho — cada nicho pode ter Meta App próprio, não só o global.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstagramImagemRequest"
+      responses:
+        "200":
+          description: resultado do post (sent | dry_run | acl_denied | sem_destino | error)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstagramImagemResponse"
+
 components:
   schemas:
     Health:
@@ -455,5 +479,51 @@ components:
         status:
           type: string
           enum: [sent, dry_run, acl_denied, sem_destino, error]
+        detail:
+          type: string
+
+    InstagramImagemRequest:
+      type: object
+      required: [niche_id, destination_id]
+      description: >
+        Exatamente 1 de `image_url` / `image_urls` precisa vir preenchido.
+      properties:
+        niche_id:
+          type: string
+          example: corte_atemporal
+        destination_id:
+          type: string
+          example: corte-atemporal-principal
+        image_url:
+          type: string
+          description: URL pública de 1 imagem (feed ou Stories)
+        image_urls:
+          type: array
+          minItems: 2
+          maxItems: 10
+          items:
+            type: string
+          description: 2-10 URLs públicas — publica um carrossel no feed
+        caption:
+          type: string
+          default: ""
+        story:
+          type: boolean
+          default: false
+          description: Stories em vez de feed — ignora caption e image_urls (só 1 imagem)
+        dry_run:
+          type: boolean
+          default: false
+
+    InstagramImagemResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [sent, dry_run, acl_denied, sem_destino, error]
+        media_id:
+          type: string
+          nullable: true
         detail:
           type: string
