@@ -132,6 +132,32 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /v1/whatsapp/enviar-imagem:
+    post:
+      operationId: whatsappEnviarImagem
+      summary: Envia 1 imagem + legenda pra um destino WhatsApp já cadastrado
+      description: >
+        Envio simples (imagem + legenda), fora da semântica de Offer (preço/desconto/
+        loja) do /v1/publish — pensado pra conteúdo sem produto único, como o card de
+        um look de moda (Corte Atemporal). Mesma ACL do /v1/publish
+        (`destination_id` precisa estar liberado pro `niche_id`). Sempre responde 200;
+        o resultado (sucesso ou motivo de não ter enviado) vai no campo `status` do
+        corpo — sem cooldown/teto/idempotency_key do /v1/publish, o chamador decide o
+        próprio ritmo de envio.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WhatsappImagemRequest"
+      responses:
+        "200":
+          description: resultado do envio (sent | dry_run | acl_denied | sem_destino | error)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappImagemResponse"
+
 components:
   schemas:
     Health:
@@ -399,5 +425,35 @@ components:
       properties:
         error:
           type: string
+        detail:
+          type: string
+
+    WhatsappImagemRequest:
+      type: object
+      required: [niche_id, destination_id, image_url]
+      properties:
+        niche_id:
+          type: string
+          example: corte_atemporal
+        destination_id:
+          type: string
+          example: corte-atemporal-ela
+        image_url:
+          type: string
+          description: URL pública da imagem já pronta (ex. card de marca do look)
+        caption:
+          type: string
+          default: ""
+        dry_run:
+          type: boolean
+          default: false
+
+    WhatsappImagemResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [sent, dry_run, acl_denied, sem_destino, error]
         detail:
           type: string
