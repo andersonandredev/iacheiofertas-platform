@@ -90,6 +90,11 @@ services:
       # ssh-agent, um arquivo direto (mais simples em container). accept-new: 1º clone
       # não trava esperando confirmação manual da host key do github.com.
       - GIT_SSH_COMMAND=ssh -i /run/secrets/config_deploy_key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/tmp/known_hosts
+    ports:
+      # Fase B do portal público (reefofertasbr.com.br) — só no loopback do host, atrás
+      # do Caddy (bloco já adicionado na VPS 2026-09-18). 8001, não 8000, porque o
+      # core já usa 8000 nessa mesma convenção (ver serviço `core` acima).
+      - "127.0.0.1:8001:8000"
     volumes:
       - ${STATE_DIR:-/opt/iacheiofertas/state}/agent-aquarismo:/app/state
       - ${SECRETS_DIR:-/opt/iacheiofertas/secrets}/iacheiofertas_config_deploy_key:/run/secrets/config_deploy_key:ro
