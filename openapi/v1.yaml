@@ -258,6 +258,20 @@ components:
           description: total de avaliações do produto, quando a loja expõe — hoje só Amazon
         flags:
           $ref: "#/components/schemas/OfferFlags"
+        coupon:
+          type: object
+          nullable: true
+          required: [discount_type, discount_value]
+          description: cupom de desconto automático (aplica sozinho, sem código) — mercadolivre e amazon apenas
+          properties:
+            discount_type:
+              type: string
+              enum: [percent, fixed]
+            discount_value:
+              type: number
+            min_purchase:
+              type: number
+              nullable: true
 
     PublishRequest:
       type: object
