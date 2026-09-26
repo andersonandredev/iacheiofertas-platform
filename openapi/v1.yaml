@@ -222,6 +222,10 @@ components:
               type: number
               nullable: true
               description: comissão de afiliado em % do preço (só Shopee hoje); a nota vai em `rating` (EnrichResponse)
+            price_max:
+              type: number
+              nullable: true
+              description: maior preço entre as variações do anúncio (só Shopee hoje); price_current é o da variação mais barata
 
     EnrichRequest:
       type: object
