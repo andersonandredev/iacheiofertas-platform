@@ -183,6 +183,10 @@ components:
           enum: [comissao, vendas]
           nullable: true
           description: ordenação da busca na Shopee — ausente/comissao = maior comissão (comportamento de sempre); vendas = mais vendidos (nicho Achei por 20)
+        max_price:
+          type: number
+          nullable: true
+          description: teto de preço aplicado na própria busca de Amazon e Mercado Livre (filtro de faixa da loja); a Shopee não tem filtro na API
 
     DiscoverResponse:
       type: object
@@ -226,6 +230,10 @@ components:
               type: number
               nullable: true
               description: maior preço entre as variações do anúncio (só Shopee hoje); price_current é o da variação mais barata
+            monthly_sales:
+              type: integer
+              nullable: true
+              description: compras no mês passado exibidas no card da busca (só Amazon hoje); não é comparável com sales (total acumulado da Shopee)
 
     EnrichRequest:
       type: object
