@@ -187,6 +187,14 @@ components:
           type: number
           nullable: true
           description: teto de preço aplicado na própria busca de Amazon e Mercado Livre (filtro de faixa da loja); a Shopee não tem filtro na API
+        ml_limite_por_termo:
+          type: integer
+          default: 10
+          description: Mercado Livre pela API oficial — produtos de catálogo por termo (cada um custa até 3 chamadas a ~1/s)
+        ml_mais_vendidos:
+          type: boolean
+          default: true
+          description: Mercado Livre pela API oficial — inclui os mais vendidos da categoria do termo (domain_discovery + highlights)
 
     DiscoverResponse:
       type: object
@@ -234,6 +242,14 @@ components:
               type: integer
               nullable: true
               description: compras no mês passado exibidas no card da busca (só Amazon hoje); não é comparável com sales (total acumulado da Shopee)
+            review_count:
+              type: integer
+              nullable: true
+              description: nº de avaliações do produto de catálogo (Mercado Livre via API oficial — a API não expõe vendidos)
+            best_seller_rank:
+              type: integer
+              nullable: true
+              description: posição nos mais vendidos da categoria do ML (quando o produto veio dos highlights)
 
     EnrichRequest:
       type: object
@@ -399,6 +415,9 @@ components:
           type: boolean
         trusted_store:
           type: boolean
+        free_shipping:
+          type: boolean
+          description: frete grátis na oferta (Mercado Livre via API oficial)
 
     PublishResponse:
       type: object
