@@ -1,0 +1,7 @@
+[Unit]
+Description=Alerta ntfy se o WhatsApp da Evolution desconectar (iacheiofertas)
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/iacheiofertas/platform/scripts/alerta-whatsapp.sh
